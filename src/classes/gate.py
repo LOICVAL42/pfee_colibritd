@@ -8,9 +8,9 @@ class Gate:
         self.targets = gate.targets
         self.label = gate.label
         if isinstance(gate, ControlledGate):
-            self.control = gate.controls
+            self.controls = gate.controls
         else:
-            self.control = None
+            self.controls = None
         self.gate = gate
 
     def __repr__(self):

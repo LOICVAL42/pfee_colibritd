@@ -3,9 +3,7 @@ from typing import List, Optional
 import numpy as np
 from mpqp.gates import Gate
 
-
-
-def create_graph_from_netlist(netlist: np.ndarray[Gate]):
+def create_graph_from_netlist(netlist: np.ndarray[Gate]) -> nx.DiGraph:
     dag = nx.DiGraph() 
     
     # Dictionnaire pour garder une trace de la dernière porte sur chaque qubit

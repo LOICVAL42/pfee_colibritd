@@ -35,3 +35,8 @@ def create_graph_from_netlist(netlist: np.ndarray[Gate]) -> nx.DiGraph:
                 last_gate_on_qubit[qubit] = gate
 
     return dag
+
+def create_netlist_from_graph(graph : nx.DiGraph) -> np.ndarray[Gate]:
+    topo_order = list(nx.topological_sort(graph))
+    netlist = [gate for gate in topo_order]
+    return netlist

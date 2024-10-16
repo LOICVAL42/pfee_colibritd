@@ -14,4 +14,7 @@ class Gate:
         self.gate = gate
 
     def __repr__(self):
-        return f"{self.label}({self.targets})"
+        return f"{self.label}({self.targets})" if self.controls == None else f"{self.label}(·{self.controls}, {self.targets})"
+
+    def is_single_qubit_gate(self) -> bool:
+        return self.controls == None and len(self.targets) == 1

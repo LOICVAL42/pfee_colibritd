@@ -1,7 +1,187 @@
 import networkx as nx
+from src.classes.gate import Gate
+import src.utils.graphs as ugraph
+from mpqp.gates import CNOT
 
 class Hadamard_gate_reduction:
 
-    def optimise(netgraph: nx.DiGraph) -> None:
-        for node in netgraph.nodes:
-            print(node)
+    def optimise(self, graph: nx.DiGraph) -> None:
+        h_patterns = [self.detect_H_P_H]
+        cnot_patterns = [self.detect_HH_CNOT_HH, self.detect_H_P_CNOT_Pd_H]
+        while True:
+            args = None
+            func = None
+            for node in graph.nodes:
+                if node.label == 'CNOT':
+                    for pattern in cnot_patterns:
+                        (args, func) = pattern(graph, node)
+                        if args != None:
+                            break
+                elif node.label == 'H':
+                    for pattern in h_patterns:
+                        (args, func) = pattern(graph, node)
+                        if args != None:
+                            break
+
+                if args != None:
+                    break
+
+            if func is not None:
+                func(graph, *args)
+                continue
+            break
+
+
+
+    # ------ Templates -------
+    # Always assuming we are starting from the leftmost hadamard gate
+    # In case of 2 qubits gates, starting from the 2 qubit gate
+
+    # Should be in single-qubit gate cancellation. Kept here to be recycled
+    """
+       ┌───┐┌───┐
+    q: ┤ H ├┤ H ├
+       └───┘└───┘
+    """
+    def detect_H_H(self, graph: nx.DiGraph, node):
+        for edge in graph.out_edges(node):
+            if edge[1].label == 'H':
+                node.to_delete = True
+                edge[1].to_delete = True
+                return ((node, edge[1]), self.modify_H_H)
+        return (None, None)
+
+    def modify_H_H(self, graph: nx.DiGraph, left, right):
+        ugraph.remove_subgraph(graph, left, right)
+
+
+    """
+         ┌───┐┌───┐┌───┐
+    q_0: ┤ H ├┤ P ├┤ H ├
+         └───┘└───┘└───┘
+    """
+    def detect_H_P_H(self, graph, node):
+        for edge in graph.out_edges(node):
+            if not edge[1].is_single_qubit_gate():
+                # Not a single qubit gate
+                return (None, None)
+            for edge2 in graph.out_edges(edge[1]):
+                if edge2[1].label == 'H':
+                    return ((node, edge[1], edge2[1]), self.modify_H_P_H)
+        return (None, None)
+    
+    def modify_H_P_H(self, graph: nx.DiGraph, left, P, right):
+        (left_nodes, right_nodes) = ugraph.get_subgraph_adjacent_nodes(graph, left, right)
+        graph.remove_nodes_from([left, P, right])
+        p_dagger = P.gate.inverse()
+
+        # Beware, may need to copy
+        new_left = Gate(p_dagger)
+        new_right = Gate(p_dagger)
+
+        for node in left_nodes:
+            graph.add_edge(node, new_left)
+
+        # The left Hadamard gate becomes the middle Hadamard Gate
+        graph.add_edge(new_left, left)
+        graph.add_edge(left, new_right)
+
+        for node in right_nodes:
+            graph.add_edge(new_right, node)
+
+    """
+         ┌───┐     ┌───┐
+    q_0: ┤ H ├──■──┤ H ├
+         ├───┤┌─┴─┐├───┤
+    q_1: ┤ H ├┤ X ├┤ H ├
+         └───┘└───┘└───┘
+    """
+    def detect_HH_CNOT_HH(self, graph: nx.DiGraph, middle):
+        left_gates = []
+        for edge in graph.in_edges(middle):
+            if edge[0].label != 'H':
+                return (None, None)
+            left_gates.append(edge[0])
+        
+        right_gates = []
+        for edge in graph.out_edges(middle):
+            if edge[1].label != 'H':
+                return (None, None)
+            right_gates.append(edge[1])
+        
+        if len(left_gates) != 2 or len(right_gates) != 2:
+            return (None, None)
+
+        return ((left_gates, middle, right_gates), self.modify_HH_CNOT_HH)
+
+    def modify_HH_CNOT_HH(self, graph: nx.DiGraph, left_gates, middle, right_gates):
+        left_nodes = ugraph.get_previous_nodes(graph, left_gates[0]) + ugraph.get_previous_nodes(graph, left_gates[1])
+        right_nodes = ugraph.get_next_nodes(graph, right_gates[0]) + ugraph.get_next_nodes(graph, right_gates[1])
+
+        graph.remove_nodes_from(left_gates + right_gates + [middle])
+        
+        # Otherwise it is a faulty CNOT
+        assert len(middle.targets) == 1
+        assert len(middle.controls) == 1
+
+        new_gate = Gate(CNOT(*middle.targets, *middle.controls))
+        graph.add_node(new_gate)
+        for left in left_nodes:
+            graph.add_edge(left, new_gate)
+        for right in right_nodes:
+            graph.add_edge(new_gate, right)
+
+    """
+    q_0: ────────────■────────────
+         ┌───┐┌───┐┌─┴─┐┌───┐┌───┐
+    q_1: ┤ H ├┤ P ├┤ X ├┤ P†├┤ H ├
+         └───┘└───┘└───┘└───┘└───┘
+    """
+    def detect_H_P_CNOT_Pd_H(self, graph: nx.Graph, middle: Gate) -> None:
+        left_gates = []
+        for edge in graph.in_edges(middle):
+            if not edge[0].is_single_qubit_gate() or edge[0].targets[0] != middle.targets[0]:
+                continue
+            for edge2 in graph.in_edges(edge[0]):
+                if edge2[0].label == 'H':
+                    left_gates.append(edge2[0])
+                    left_gates.append(edge[0])
+                    break
+            if len(left_gates) != 0:
+                break
+
+        if len(left_gates) != 2:
+            return (None, None)
+
+        right_gates = []
+        for edge in graph.out_edges(middle):
+            if not edge[1].is_single_qubit_gate() or edge[1].targets[0] != middle.targets[0]:
+                continue
+            for edge2 in graph.out_edges(edge[1]):
+                if edge2[1].label == 'H':
+                    right_gates.append(edge[1])
+                    right_gates.append(edge2[1])
+                    break
+            if len(right_gates) != 0:
+                break
+
+        if len(right_gates) != 2:
+            return (None, None)
+
+        if left_gates[1].gate.inverse() != right_gates[0].gate.inverse():
+            return (None, None)
+
+        return ((left_gates, middle, right_gates), self.modify_H_P_CNOT_Pd_H)
+
+    def modify_H_P_CNOT_Pd_H(self, graph: nx.Graph, left_gates, middle, right_gates):
+        (left_nodes, right_nodes) = ugraph.get_subgraph_adjacent_nodes(graph, left_gates[0], right_gates[1])
+        left_top = []
+
+        graph.remove_nodes_from(left_gates + right_gates)
+        for node in left_nodes:
+            graph.add_edge(node, right_gates[0])
+        for node in right_nodes:
+            graph.add_edge(left_gates[1], node)
+
+        graph.add_edge(right_gates[0], middle)
+        graph.add_edge(middle, left_gates[1])

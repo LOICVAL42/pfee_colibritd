@@ -3,6 +3,9 @@ from typing import List, Optional
 import numpy as np
 from mpqp.gates import Gate
 
+def hello():
+    return "(hello)"
+    
 def create_graph_from_netlist(netlist: np.ndarray[Gate]) -> nx.DiGraph:
     dag = nx.DiGraph() 
     

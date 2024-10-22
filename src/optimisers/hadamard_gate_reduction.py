@@ -1,3 +1,4 @@
+import copy
 import networkx as nx
 from src.classes.gate import Gate
 import src.utils.graphs as ugraph
@@ -6,8 +7,8 @@ from mpqp.gates import CNOT
 class Hadamard_gate_reduction:
 
     def optimise(self, graph: nx.DiGraph) -> None:
-        h_patterns = [self.detect_H_P_H]
-        cnot_patterns = [self.detect_HH_CNOT_HH, self.detect_H_P_CNOT_Pd_H]
+        h_patterns = [self.detect_H_P_H, self.detect_H_P_CNOT_Pd_H]
+        cnot_patterns = [self.detect_HH_CNOT_HH]
         while True:
             args = None
             func = None
@@ -62,7 +63,7 @@ class Hadamard_gate_reduction:
     """
     def detect_H_P_H(self, graph, node):
         for edge in graph.out_edges(node):
-            if not edge[1].is_single_qubit_gate():
+            if not edge[1].is_single_qubit_gate() or not edge[1].is_phase_gate():
                 # Not a single qubit gate
                 return (None, None)
             for edge2 in graph.out_edges(edge[1]):
@@ -73,11 +74,11 @@ class Hadamard_gate_reduction:
     def modify_H_P_H(self, graph: nx.DiGraph, left, P, right):
         (left_nodes, right_nodes) = ugraph.get_subgraph_adjacent_nodes(graph, left, right)
         graph.remove_nodes_from([left, P, right])
-        p_dagger = P.gate.inverse()
+        p_dagger = P.create_inverse()
 
         # Beware, may need to copy
-        new_left = Gate(p_dagger)
-        new_right = Gate(p_dagger)
+        new_left = p_dagger
+        new_right = copy.copy(p_dagger)
 
         for node in left_nodes:
             graph.add_edge(node, new_left)
@@ -137,43 +138,50 @@ class Hadamard_gate_reduction:
     q_1: ┤ H ├┤ P ├┤ X ├┤ P†├┤ H ├
          └───┘└───┘└───┘└───┘└───┘
     """
-    def detect_H_P_CNOT_Pd_H(self, graph: nx.Graph, middle: Gate) -> None:
-        left_gates = []
-        for edge in graph.in_edges(middle):
-            if not edge[0].is_single_qubit_gate() or edge[0].targets[0] != middle.targets[0]:
-                continue
-            for edge2 in graph.in_edges(edge[0]):
-                if edge2[0].label == 'H':
-                    left_gates.append(edge2[0])
-                    left_gates.append(edge[0])
-                    break
-            if len(left_gates) != 0:
-                break
+    def detect_H_P_CNOT_Pd_H(self, graph: nx.Graph, left: Gate) -> None:
+        left_gates = [left]
+        # There should be only one, need to redo graphs
+        for edge in graph.out_edges(left):
+            if edge[1].is_phase_gate():
+                left_gates.append(edge[1])
 
         if len(left_gates) != 2:
             return (None, None)
 
-        right_gates = []
-        for edge in graph.out_edges(middle):
-            if not edge[1].is_single_qubit_gate() or edge[1].targets[0] != middle.targets[0]:
-                continue
-            for edge2 in graph.out_edges(edge[1]):
-                if edge2[1].label == 'H':
-                    right_gates.append(edge[1])
-                    right_gates.append(edge2[1])
+        target = left.targets[0]
+        pd_gate = None
+        leftest_gate = left_gates[1]
+        is_there_still_cnots = True
+        middle_gates = []
+        # problem
+        while is_there_still_cnots:
+            is_there_still_cnots = False
+            for edge in graph.out_edges(leftest_gate):
+                if edge[1].label == 'CNOT' and edge[1].targets[0] == target:
+                    leftest_gate = edge[1]
+                    middle_gates.append(leftest_gate)
+                    is_there_still_cnots = True
                     break
-            if len(right_gates) != 0:
-                break
+                elif edge[1].is_phase_gate() and edge[1].targets[0] == target:
+                    pd_gate = edge[1]
+                    break
+                elif edge[1].is_single_qubit_gate() and edge[1].targets[0] == target:
+                    return (None, None)
+        
+        if len(middle_gates) == 0 or pd_gate is None or not left_gates[1].is_inverse(pd_gate):
+            return (None, None)
+
+        right_gates = [pd_gate]        
+        for edge in graph.out_edges(pd_gate):
+            if edge[1].label == 'H':
+                right_gates.append(edge[1])
 
         if len(right_gates) != 2:
             return (None, None)
 
-        if left_gates[1].gate.inverse() != right_gates[0].gate.inverse():
-            return (None, None)
-
-        return ((left_gates, middle, right_gates), self.modify_H_P_CNOT_Pd_H)
-
-    def modify_H_P_CNOT_Pd_H(self, graph: nx.Graph, left_gates, middle, right_gates):
+        return ((left_gates, middle_gates, right_gates), self.modify_H_P_CNOT_Pd_H)
+            
+    def modify_H_P_CNOT_Pd_H(self, graph: nx.Graph, left_gates, middle_gates, right_gates):
         (left_nodes, right_nodes) = ugraph.get_subgraph_adjacent_nodes(graph, left_gates[0], right_gates[1])
         left_top = []
 
@@ -183,5 +191,5 @@ class Hadamard_gate_reduction:
         for node in right_nodes:
             graph.add_edge(left_gates[1], node)
 
-        graph.add_edge(right_gates[0], middle)
-        graph.add_edge(middle, left_gates[1])
+        graph.add_edge(right_gates[0], middle_gates[0])
+        graph.add_edge(middle_gates[-1], left_gates[1])

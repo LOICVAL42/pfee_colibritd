@@ -16,7 +16,7 @@ class Single_qubit_gate_cancellation:
                     continue
                 # As it's a single qubit gate, there should be only one
                 for edge in graph.out_edges(node):
-                    if node.gate.inverse() == edge[1].gate.inverse():
+                    if edge[1].is_single_qubit_gate() and node.is_inverse(edge[1]):
                         gates_to_cancel.append(edge)
 
             self.simplify_gates(graph, gates_to_cancel)

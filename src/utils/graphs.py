@@ -23,6 +23,13 @@ def get_next_nodes(graph: nx.DiGraph, node):
 def get_subgraph_adjacent_nodes(graph: nx.DiGraph, left, right):
     return (get_previous_nodes(graph, left), get_next_nodes(graph, right))
 
+def remove_single_node(graph: nx.DiGraph, node) -> None:
+    (left_nodes, right_nodes) = get_subgraph_adjacent_nodes(graph, node, node)
+    graph.remove_node(node)
+    for l in left_nodes:
+        for r in right_nodes:
+            graph.add_edge(l, r)
+
 def remove_subgraph(graph: nx.DiGraph, left, right, inbetween = []) -> None:
     (left_nodes, right_nodes) = get_subgraph_adjacent_nodes(graph, left, right)
     graph.remove_node(left)

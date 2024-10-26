@@ -37,5 +37,11 @@ class Gate:
             raise Exception("Verifying inverse on single qubit gates only")
         return self.gate.inverse().is_equivalent(other_gate.gate)
 
+    def is_hadamard_gate(self) -> bool:
+        return self.is_single_qubit_gate and self.label == "H"
+
     def is_phase_gate(self) -> bool:
         return self.is_single_qubit_gate() and (self.label == "S" or self.label == "S†")
+
+    def is_Rz_gate(self) -> bool:
+        return self.is_single_qubit_gate() and self.label in ["S", "S†", "T", "T†", "Rz", "Rz†"]

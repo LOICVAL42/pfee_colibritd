@@ -32,7 +32,7 @@ class Single_qubit_gate_cancellation:
                 if new_node != None:
                     break
             if new_node != None:
-                if edge[0].is_inverse(new_node):
+                if new_node.is_single_qubit_gate() and edge[0].is_inverse(new_node):
                     gates_to_cancel.append((edge[0], new_node, False))
                     new_node = None
             current_node = new_node
@@ -88,13 +88,14 @@ class Single_qubit_gate_cancellation:
         for edge in graph.out_edges(left):
             if edge[1].is_Rz_gate() and edge[1].targets == targets:
                 middle = edge[1]
+                break
 
         if middle is None:
             return None
 
         right = None
         for edge in graph.out_edges(middle):
-            if edge[1].label != 'CNOT' or edge[1].targets != targets:
+            if edge[1].label != 'CNOT' or edge[1].targets[0] not in targets:
                 return None
             right = edge[1]
 
@@ -112,7 +113,7 @@ class Single_qubit_gate_cancellation:
             return None
 
         for edge in graph.out_edges(cnot):
-            if edge[1].targets[0] in targets:
+            if edge[1].targets[0] in targets or edge[1].controls[0] in targets:
                 return edge[1]
 
         return None

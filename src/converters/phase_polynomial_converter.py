@@ -2,66 +2,65 @@ from mpqp.gates import Rz, CNOT
 from ..classes.gate import Gate
 import numpy as np
 
-def hello():
-    return "(hello)"
+import re
+
+def extract_control_target(term):
+    """
+    Extracts control and target qubits from a CNOT term in the form "x1 ⊕ x2".
+    
+    :param term: A string representing a CNOT gate in the form "x1 ⊕ x2".
+    :return: A tuple (control, target) with the control and target qubits as integers.
+    """
+    match = re.search(r"x(\d+)\s⊕\s*x(\d+)", term)
+    if match:
+        control = int(match.group(1))
+        target = int(match.group(2))
+        return control, target
+    else:
+        raise ValueError("Format invalide pour le terme CNOT")
+
 
 def create_phase_polynomial_from_netlist(netlist: np.ndarray[Gate]):
     """
-    Convertit un circuit composé de portes Rz, CNOT, et NOT en polynôme de phase.
-    
-    :param circuit: Liste des objets Gate dans le circuit.
-    :return: Un polynôme de phase représentant le circuit.
+    Converts a circuit of Rz, CNOT, and NOT gates into a phase polynomial.
+
+    :param netlist: List of Gate objects in the circuit.
+    :return: A phase polynomial representing the circuit.
     """
-    # Phase polynomiale pour chaque qubit
-    phase_poly = {}
+    phase_poly = []
     
-    # Initialiser les polynômes pour chaque qubit
-    for gate in netlist:
-        for qubit in gate.targets:
-            if qubit not in phase_poly:
-                phase_poly[qubit] = []
-    
-    # Parcourir les portes du circuit pour construire le polynôme
     for gate in netlist:
         if gate.label == 'Rz':
-            qubit = gate.targets[0]
-            angle = gate.gate.theta   # Paramètre d'angle pour la porte Rz
-            phase_poly[qubit].append(angle)
-        
+            phase_poly.append((gate.gate.theta, gate.targets[0]))
         elif gate.label == 'CNOT':
-            control_qubit = gate.controls[0]  # Le qubit de contrôle
-            target_qubit = gate.targets[0]  # Le qubit cible
-            # Modifier la dépendance du qubit cible par rapport au qubit de contrôle
-            phase_poly[target_qubit].append(f"(x{control_qubit} ⊕ x{target_qubit})")
-        
-        elif gate.label == 'X':  # Pour une porte NOT (X)
-            qubit = gate.targets[0]
-            phase_poly[qubit].append(f"x{qubit} ⊕ 1")
+            control, target = gate.controls[0], gate.targets[0]
+            phase_poly.append(f"(x{control} ⊕ x{target})")
+        elif gate.label == 'X':
+            phase_poly.append(f"x{gate.targets[0]} ⊕ 1")
     
     return phase_poly
 
-def create_circuit_from_phase_polynomial(phase_poly):
+
+
+def create_netlist_from_phase_polynomial(phase_poly):
     """
-    Recrée un circuit à partir d'un polynôme de phase.
-    
-    :param phase_poly: Un dictionnaire représentant le polynôme de phase pour chaque qubit.
-    :return: Une liste de portes quantiques qui correspond au polynôme.
+    Recreates a circuit from a phase polynomial.
+
+    :param phase_poly: Dictionary representing the phase polynomial for each qubit.
+    :return: A list of quantum gates corresponding to the polynomial.
     """
+
     circuit = []
     
-    # Parcourir chaque qubit et ses termes dans le polynôme de phase
-    for qubit, terms in phase_poly.items():
-        for term in terms:
-            if isinstance(term, str) and '⊕' in term:
-                # C'est une porte CNOT
-                control_qubit = int(term[term.find('x')+1:term.find('⊕')].strip())
-                target_qubit = qubit
-                cnot_gate = Gate(CNOT(control = control_qubit, target = target_qubit))
-                circuit.append(cnot_gate)
-            else:
-                # C'est une porte Rz avec un certain angle
-                rz_gate = Gate(Rz(term, qubit))
-                circuit.append(rz_gate)
+    for term in phase_poly:
+        if isinstance(term, str) and '⊕' in term:
+            control, target = extract_control_target(term)
+            circuit.append(Gate(CNOT(control=control, target=target)))
+        else:
+            theta, target = term
+            circuit.append(Gate(Rz(theta, target)))
     
     return circuit
+
+
 

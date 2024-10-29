@@ -1,59 +1,135 @@
+import re
+
+def extract_control_target(term):
+    """
+    Extracts control and target qubits from a CNOT term in the form "x1 ⊕ x2".
+    
+    :param term: A string representing a CNOT gate in the form "x1 ⊕ x2".
+    :return: A tuple (control, target) with the control and target qubits as integers.
+    """
+    match = re.search(r"x(\d+)\s⊕\s*x(\d+)", term)
+    if match:
+        control = int(match.group(1))
+        target = int(match.group(2))
+        return control, target
+    else:
+        raise ValueError("Format invalide pour le terme CNOT")
+
+
+
 def commutation_cnot_rz(equation):
-    if len(equation) < 2 :
-        return equation 
-    j = 0
-    term = equation[j]
-    if (isinstance(term, str) and'⊕' in term):
+    """
+    Optimize the position of Rz gates by commuting them through CNOT gates if possible.
+
+    :param equation: List of terms representing a sequence of gates (e.g., Rz and CNOT).
+    :return: Optimized sequence with Rz gates moved forward if they commute with an even number of CNOT gates.
+    """
+    # If the equation has fewer than 2 terms, return it as is
+    if len(equation) < 2:
         return equation
-    
-    new_place = 0
-    cnto_dict = {}
-    while (j < len(equation)):
-        good = True
-        term = equation[j]
-                
-        if (isinstance(term, str) and'⊕' in term):
-            if term in cnto_dict:
-                cnto_dict[term] = cnto_dict[term] + 1
-            else:
-                cnto_dict[term] = 1
-        
-        for cnot , number in cnto_dict.items():
-            if number % 2 != 0:
-                good = False
 
-        j = j+1
-        if (good == True and len(cnto_dict.items()) != 0):
-            new_place = j
+    # Initialization
+    rz_term = equation[0]
+    if isinstance(rz_term, str) and '⊕' in rz_term:
+        # If the first term is a CNOT, we cannot commute it
+        return equation
 
-    new_equation = []
-    if (new_place != 0):
-        rz_swap = equation[0]
-        for i in range(1,new_place):
-            new_equation.append(equation[i])
-        new_equation.append(rz_swap)
-        for i in range(new_place,len(equation)):
-            new_equation.append(equation[i])
+    _, target_rz = rz_term  # Get the target qubit of the initial Rz
+    cnot_count = {}  # Dictionary to count CNOT gates affecting the same target as Rz
+    last_commutable_position = 0
+
+    # Iterate through the equation to check commutativity
+    for j, term in enumerate(equation[1:], start=1):
+        if isinstance(term, str) and '⊕' in term:
+            # Extract control and target qubits of the CNOT
+            control, target = extract_control_target(term)
+            if target == target_rz:
+                # Count CNOTs acting on the same qubit as the Rz
+                cnot_count[term] = cnot_count.get(term, 0) + 1
+            
+            elif control == target_rz and not all(count % 2 == 0 for count in cnot_count.values()):
+                break
+
+        # Check if all relevant CNOT gates appear an even number of times to allow commutation
+        if all(count % 2 == 0 for count in cnot_count.values()) and cnot_count:
+            last_commutable_position = j
+
+    # If commutation is possible, rearrange the equation
+    if last_commutable_position > 0:
+        new_equation = equation[1:last_commutable_position + 1] + [rz_term] + equation[last_commutable_position + 1:]
         return new_equation
-    else:    
-        return equation
-        
-        
-        
-def optimize_phase_polynomial(phase_polynomial):
-    optimized_phase_poly = {}
 
+    # Otherwise, return the original equation unchanged
+    return equation
+
+
+
+
+def pretreatment_phase_polynomial(equation):
     # Parcourir chaque qubit et son équation
-    for qubit, equation in phase_polynomial.items():
-        swap_equation = []
-        while len(equation) != 0:
-            first_term =  equation[0]
-            equation = commutation_cnot_rz(equation)
-            if(first_term == equation[0]):
-                equation.remove(first_term)
-                swap_equation.append(first_term)
-        
-        # Assigner la version optimisée à ce qubit
-        optimized_phase_poly[qubit] = swap_equation
+    swap_equation = []
+
+    while equation:
+        new_equation = commutation_cnot_rz(equation)
+        if(new_equation == equation):
+            term = equation.pop(0)
+            swap_equation.append(term)
+        else:
+            equation = new_equation
+            
+    reduct_equation = []
+    while swap_equation:
+        actual_term = swap_equation.pop(0)
+        pop_list = []
+        if isinstance(actual_term, str) and '⊕' in actual_term:
+            actual_control, actual_target = extract_control_target(actual_term)
+            cnot_count = 1
+            j = 0
+            while j < len(swap_equation):
+                term = swap_equation[j]
+                if isinstance(term, str) and '⊕' in term:
+                    control , target = extract_control_target(term)
+                    if actual_term == term:
+                        cnot_count = cnot_count + 1
+                        pop_list.append(j)
+                        j = j + 1
+                    else:
+                        if actual_target == target or actual_target == control or actual_control == target:
+                            break
+                        else:
+                            j = j + 1
+                else:
+                    _ , target = term 
+                    if actual_target != target:
+                        j = j + 1
+                    else:
+                        break
+            if cnot_count % 2 != 0:
+                reduct_equation.append(actual_term)
+                
+        else:
+            j = 0
+            actual_theta, actual_target = actual_term
+            all_theta = actual_theta
+            while j < len(swap_equation):
+                term = swap_equation[j]
+                if isinstance(term, str) and '⊕' in term:
+                    _ , target = extract_control_target(term)
+                    if actual_target == target:
+                        break
+                    else:
+                        j = j + 1
+                else:
+                    theta, target = term
+                    if actual_target == target:
+                        all_theta = all_theta + theta
+                        pop_list.append(j)
+                    j = j + 1
+            reduct_equation.append((all_theta, actual_target))
+            
+        for j in pop_list:
+            swap_equation.pop(j)
+    return reduct_equation
+                
     
-    return optimized_phase_poly
+

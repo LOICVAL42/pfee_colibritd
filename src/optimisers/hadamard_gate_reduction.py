@@ -2,7 +2,8 @@ import copy
 import networkx as nx
 from src.classes.gate import Gate
 import src.utils.graphs as ugraph
-from mpqp.gates import CNOT, Id
+from mpqp.gates import CNOT, H, Id, S
+from .patterns import Pattern
 
 class HadamardGateReduction:
 
@@ -32,11 +33,50 @@ class HadamardGateReduction:
                 continue
             break
 
+    def new_optimise(graph: nx.DiGraph):
+        patterns = HadamardGateReduction.get_patterns()
+        res = None
+        while res is None:
+            res = None
+            for node in graph.nodes:
+                for p in patterns:
+                    res = p.is_pattern(graph, node)
+                    if res != None:
+                        break
+                
+                if res != None:
+                    break
+
+
+    def get_patterns():
+        return [
+            HadamardGateReduction.get_H_P_H_pattern()
+        ]
+
     """
          ┌───┐┌───┐┌───┐
     q_0: ┤ H ├┤ P ├┤ H ├
          └───┘└───┘└───┘
     """
+
+    def get_H_P_H_pattern():
+        first_h_gate = Gate(H(0))
+        s_gate = Gate(S(0))
+        return Pattern(nx.DiGraph({
+                first_h_gate: {s_gate},
+                s_gate: {Gate(H(0))}
+            }),
+            first_h_gate,
+            HadamardGateReduction.new_modify_H_P_H)
+
+    def new_modify_H_P_H(graph: nx.DiGraph, subgraph: nx.DiGraph):
+        start_nodes = [n for n, d in subgraph.in_degree() if d == 0]
+        end_nodes = [n for n, d in subgraph.out_degree() if d == 0]
+        P = list(subgraph.out_edges(start_nodes[0]))[0][1]
+        HadamardGateReduction.modify_H_P_H(graph, start_nodes[0], P, end_nodes[0])
+        return True
+
+
     def detect_H_P_H(graph, node):
         for edge in graph.out_edges(node):
             if not edge[1].is_single_qubit_gate() or not edge[1].is_phase_gate():

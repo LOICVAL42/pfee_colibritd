@@ -4,6 +4,7 @@ from src.classes.gate import Gate
 import src.utils.graphs as ugraph
 from mpqp.gates import CNOT, H, Id, S
 from .patterns import Pattern
+import src.utils.gates as ugate
 
 class HadamardGateReduction:
 
@@ -46,11 +47,14 @@ class HadamardGateReduction:
                 
                 if res != None:
                     break
+            break
 
 
     def get_patterns():
         return [
-            HadamardGateReduction.get_H_P_H_pattern()
+            HadamardGateReduction.get_H_P_H_pattern(),
+            HadamardGateReduction.get_HH_CNOT_HH_pattern(),
+            HadamardGateReduction.get_H_P_CNOT_Pd_H(),
         ]
 
     """
@@ -113,6 +117,22 @@ class HadamardGateReduction:
     q_1: ┤ H ├┤ X ├┤ H ├
          └───┘└───┘└───┘
     """
+    def get_HH_CNOT_HH_pattern():
+        first_h_gate = Gate(H(0))
+        cnot_gate = Gate(CNOT(0, 1))
+        return Pattern(nx.DiGraph({
+            first_h_gate: {cnot_gate},
+            Gate(H(1)): {cnot_gate},
+            cnot_gate: {Gate(H(0)), Gate(H(1))}
+        }), first_h_gate, HadamardGateReduction.new_modify_HH_CNOT_HH)
+
+    def new_modify_HH_CNOT_HH(graph: nx.DiGraph, subgraph: nx.DiGraph):
+        start_nodes = [n for n, d in subgraph.in_degree() if d == 0]
+        end_nodes = [n for n, d in subgraph.out_degree() if d == 0]
+        cnot = list(subgraph.out_edges(start_nodes[0]))[0][1]
+        HadamardGateReduction.modify_HH_CNOT_HH(graph, start_nodes, cnot, end_nodes)
+        return True
+
     def detect_HH_CNOT_HH(graph: nx.DiGraph, middle):
         left_gates = []
         for edge in graph.in_edges(middle):
@@ -154,6 +174,30 @@ class HadamardGateReduction:
     q_1: ┤ H ├┤ P ├┤ X ├┤ P†├┤ H ├
          └───┘└───┘└───┘└───┘└───┘
     """
+    def get_H_P_CNOT_Pd_H():
+        first_h_gate = Gate(H(1))
+        p_gate = Gate(S(1))
+        cnot = Gate(CNOT(0, 1))
+        p_dagger = Gate(ugate.Sdg(1))
+        # FIXME handle infite amount of CNOTs between
+        return Pattern(nx.DiGraph({
+            first_h_gate: {p_gate},
+            p_gate: {cnot},
+            cnot: {p_dagger},
+            p_dagger: {Gate(H(1))}
+        }), first_h_gate, HadamardGateReduction.new_modify_H_P_CNOT_Pd_H)
+
+    def new_modify_H_P_CNOT_Pd_H(graph: nx.DiGraph, subgraph: nx.DiGraph):
+        start_node = [n for n, d in subgraph.in_degree() if d == 0][0]
+        second_start_node = list(subgraph.out_edges(start_node))[0][1]
+
+        end_node = [n for n, d in subgraph.out_degree() if d == 0][0]
+        second_end_node = list(subgraph.in_edges(end_node))[0][0]
+        cnots = [n for n in subgraph.nodes if n.label == 'CNOT']
+        HadamardGateReduction.modify_H_P_CNOT_Pd_H(graph, [start_node, second_start_node], cnots, [second_end_node, end_node])
+        return True
+        
+
     def detect_H_P_CNOT_Pd_H(graph: nx.Graph, left: Gate) -> None:
         left_gates = [left]
         # There should be only one, need to redo graphs

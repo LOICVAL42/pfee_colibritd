@@ -1,21 +1,4 @@
-import re
-
-def extract_control_target(term):
-    """
-    Extracts control and target qubits from a CNOT term in the form "x1 ⊕ x2".
-    
-    :param term: A string representing a CNOT gate in the form "x1 ⊕ x2".
-    :return: A tuple (control, target) with the control and target qubits as integers.
-    """
-    match = re.search(r"x(\d+)\s⊕\s*x(\d+)", term)
-    if match:
-        control = int(match.group(1))
-        target = int(match.group(2))
-        return control, target
-    else:
-        raise ValueError("Format invalide pour le terme CNOT")
-
-
+from ..tools.tools_phase_polynomial import extract_control_target
 
 def commutation_cnot_rz(equation):
     """
@@ -46,7 +29,7 @@ def commutation_cnot_rz(equation):
             if target == target_rz:
                 # Count CNOTs acting on the same qubit as the Rz
                 cnot_count[term] = cnot_count.get(term, 0) + 1
-            
+            # Case of a control in the CNOT Pattern
             elif control == target_rz and not all(count % 2 == 0 for count in cnot_count.values()):
                 break
 
@@ -62,21 +45,21 @@ def commutation_cnot_rz(equation):
     # Otherwise, return the original equation unchanged
     return equation
 
-
-
-
-def pretreatment_phase_polynomial(equation):
+def swap_phase_polynomial(equation):
     # Parcourir chaque qubit et son équation
     swap_equation = []
 
     while equation:
-        new_equation = commutation_cnot_rz(equation)
-        if(new_equation == equation):
+        commute_equation = commutation_cnot_rz(equation)
+        if(commute_equation == equation):
             term = equation.pop(0)
             swap_equation.append(term)
         else:
-            equation = new_equation
-            
+            equation = commute_equation
+    return swap_equation
+
+
+def reduction_phase_polynomial(swap_equation):       
     reduct_equation = []
     while swap_equation:
         actual_term = swap_equation.pop(0)
@@ -125,7 +108,8 @@ def pretreatment_phase_polynomial(equation):
                         all_theta = all_theta + theta
                         pop_list.append(j)
                     j = j + 1
-            reduct_equation.append((all_theta, actual_target))
+            if all_theta != 0:
+                reduct_equation.append((all_theta, actual_target))
             
         for j in pop_list:
             swap_equation.pop(j)
@@ -133,3 +117,7 @@ def pretreatment_phase_polynomial(equation):
                 
     
 
+def optimize_phase_polynomial(equation):
+    swap_equation = swap_phase_polynomial(equation)
+    reduct_equation = reduction_phase_polynomial(swap_equation)
+    return reduct_equation

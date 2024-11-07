@@ -1,23 +1,7 @@
-from mpqp.gates import Rz, CNOT
+from mpqp.gates import Rz, CNOT, S
 from ..classes.gate import Gate
 import numpy as np
-
-import re
-
-def extract_control_target(term):
-    """
-    Extracts control and target qubits from a CNOT term in the form "x1 ⊕ x2".
-    
-    :param term: A string representing a CNOT gate in the form "x1 ⊕ x2".
-    :return: A tuple (control, target) with the control and target qubits as integers.
-    """
-    match = re.search(r"x(\d+)\s⊕\s*x(\d+)", term)
-    if match:
-        control = int(match.group(1))
-        target = int(match.group(2))
-        return control, target
-    else:
-        raise ValueError("Format invalide pour le terme CNOT")
+from ..tools.tools_phase_polynomial import extract_control_target
 
 
 def create_phase_polynomial_from_netlist(netlist: np.ndarray[Gate]):
@@ -32,9 +16,13 @@ def create_phase_polynomial_from_netlist(netlist: np.ndarray[Gate]):
     for gate in netlist:
         if gate.label == 'Rz':
             phase_poly.append((gate.gate.theta, gate.targets[0]))
+        elif gate.label == 'S':
+            phase_poly.append((np.pi/2, gate.targets[0]))
+        elif gate.label == 'Sdag':
+            phase_poly.append((np.pi/2, gate.targets[0]))
         elif gate.label == 'CNOT':
             control, target = gate.controls[0], gate.targets[0]
-            phase_poly.append(f"(x{control} ⊕ x{target})")
+            phase_poly.append(f"(x{target} ⊕ x{control})")
         elif gate.label == 'X':
             phase_poly.append(f"x{gate.targets[0]} ⊕ 1")
     
@@ -58,7 +46,10 @@ def create_netlist_from_phase_polynomial(phase_poly):
             circuit.append(Gate(CNOT(control=control, target=target)))
         else:
             theta, target = term
-            circuit.append(Gate(Rz(theta, target)))
+            if theta == np.pi/2:
+                circuit.append(Gate(S(target)))
+            else:
+                circuit.append(Gate(Rz(theta, target)))
     
     return circuit
 

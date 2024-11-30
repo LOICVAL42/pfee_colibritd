@@ -37,17 +37,22 @@ class HadamardGateReduction:
     def new_optimise(graph: nx.DiGraph):
         patterns = HadamardGateReduction.get_patterns()
         res = None
-        while res is None:
+        found_one = True
+        while found_one:
+            found_one = False
             res = None
-            for node in graph.nodes:
-                for p in patterns:
-                    res = p.is_pattern(graph, node)
+            while res is None:
+                res = None
+                for node in graph.nodes:
+                    for p in patterns:
+                        res = p.is_pattern(graph, node)
+                        if res != None:
+                            found_one = True
+                            break
+
                     if res != None:
                         break
-                
-                if res != None:
-                    break
-            break
+                break
 
 
     def get_patterns():
@@ -185,7 +190,7 @@ class HadamardGateReduction:
             p_gate: {cnot},
             cnot: {p_dagger},
             p_dagger: {Gate(H(1))}
-        }), first_h_gate, HadamardGateReduction.new_modify_H_P_CNOT_Pd_H)
+        }), first_h_gate, HadamardGateReduction.new_modify_H_P_CNOT_Pd_H, repeated_gate=cnot)
 
     def new_modify_H_P_CNOT_Pd_H(graph: nx.DiGraph, subgraph: nx.DiGraph):
         start_node = [n for n, d in subgraph.in_degree() if d == 0][0]

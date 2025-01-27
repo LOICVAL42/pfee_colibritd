@@ -34,6 +34,7 @@ class GateCancellationABC(ABC):
                     gates_to_cancel.append((*edge, True))
 
             cls.simplify_gates(graph, gates_to_cancel)
+        return graph
     
     @classmethod
     def commute_optimise(cls, graph: nx.DiGraph, edge, gates_to_cancel):

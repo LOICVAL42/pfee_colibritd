@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import networkx as nx
 import src.utils.graphs as ugraph
+from ..patterns import Pattern
 from src.classes.gate import Gate
 
 class GateCancellationABC(ABC):
@@ -41,9 +42,12 @@ class GateCancellationABC(ABC):
         current_node = edge[1]
         found_gate = False
         while current_node != None:
+            pattern: Pattern
             for pattern in patterns:
                 # A pattern takes as argument the commuted gate and the one it is being verified to commute with
-                new_node = pattern(graph, edge[0], current_node)
+                new_node = pattern.exec_completion_function_if_is_pattern(graph, current_node)
+                # Needs to be compared due to error prone in the singular CNOT pattern
+                new_node = new_node if new_node is not None and current_node.targets == new_node.targets else None
                 if new_node != None:
                     break
             if new_node != None:

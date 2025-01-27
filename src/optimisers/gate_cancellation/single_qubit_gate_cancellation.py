@@ -2,12 +2,14 @@ import networkx as nx
 import numpy as np
 from src.classes.gate import Gate
 import src.utils.graphs as ugraph
+from mpqp.gates import CNOT, H, Id, S
+from ..patterns import Pattern
 from .gate_cancellation import GateCancellationABC
 
 class SingleQubitGateCancellation(GateCancellationABC):
 
-    def get_patterns():
-        return [SingleQubitGateCancellation.commute_CNOT, SingleQubitGateCancellation.commute_CNOT_Rz_CNOT, SingleQubitGateCancellation.commute_H_CNOT_H]
+    #def get_patterns():
+    #    return [SingleQubitGateCancellation.commute_CNOT, SingleQubitGateCancellation.commute_CNOT_Rz_CNOT, SingleQubitGateCancellation.commute_H_CNOT_H]
 
     def is_required_gate(gate: Gate):
         return gate.is_single_qubit_gate()
@@ -18,71 +20,59 @@ class SingleQubitGateCancellation(GateCancellationABC):
     def can_commute(gate: Gate):
         return gate.is_Rz_gate()
 
-    # Patterns
-    def commute_H_CNOT_H(graph, gate, left):
-        if not left.is_hadamard_gate() or left.targets != gate.targets:
+
+    def get_patterns():
+        return [
+            SingleQubitGateCancellation.get_H_CNOT_H_pattern(),
+            SingleQubitGateCancellation.get_CNOT_Rz_CNOT_pattern(),
+            SingleQubitGateCancellation.get_CNOT_pattern(),
+        ]
+
+    def get_H_CNOT_H_pattern():
+        first_h_gate = Gate(H(1))
+        cnot = Gate(CNOT(0, 1))
+        return Pattern(nx.DiGraph({
+                first_h_gate: {cnot},
+                cnot: {Gate(H(1))}
+            }),
+            first_h_gate,
+            SingleQubitGateCancellation.return_next_gate)
+    
+    def return_next_gate(graph: nx.DiGraph, subgraph: nx.DiGraph):
+        # Should be one, same target as commuting gate
+        start_node = [n for n, d in subgraph.in_degree() if d == 0][0]
+        end_nodes = [n for n, d in subgraph.out_degree() if d == 0]
+        
+        # Sole CNOT case
+        if start_node == end_nodes:
+            for node in end_nodes:
+                if start_node.controls == node.targets:
+                    # Should be only 1
+                    for edge in graph.out_edges(node):
+                        return edge[1]
             return None
 
-        middle = None
-        for edge in graph.out_edges(left):
-            if edge[1].label != 'CNOT' or edge[1].targets != gate.targets:
-                return None
-            middle = edge[1]
-
-        if middle is None:
-            return None
-
-        right = None
-        # Different bc a CNOT has multiple out_edges (2)
-        for edge in graph.out_edges(middle):
-            if edge[1].is_hadamard_gate() and edge[1].targets == gate.targets:
-                right = edge[1]
-
-        if right == None:
-            return None
-
-        # Should be only one or less
-        for edge in graph.out_edges(right):
-            return edge[1]
-
+        for node in end_nodes:
+            if start_node.targets == node.targets:
+                # Should be only 1
+                for edge in graph.out_edges(node):
+                    return edge[1]
         return None
 
-    def commute_CNOT_Rz_CNOT(graph, gate, left):
-        if left.label != 'CNOT' or left.targets != gate.targets:
-            return None
+    def get_CNOT_Rz_CNOT_pattern():
+        cnot1 = Gate(CNOT(0, 1))
+        rz_gate = Gate(S(1))
+        rz_gate.should_be_rz = True
+        cnot2 = Gate(CNOT(0, 1))
+        return Pattern(nx.DiGraph({
+                cnot1: {rz_gate},
+                rz_gate: {cnot2}
+            }),
+            cnot1,
+            SingleQubitGateCancellation.return_next_gate)
 
-        middle = None
-        for edge in graph.out_edges(left):
-            if edge[1].is_Rz_gate() and edge[1].targets == gate.targets:
-                middle = edge[1]
-                break
-
-        if middle is None:
-            return None
-
-        right = None
-        for edge in graph.out_edges(middle):
-            if edge[1].label != 'CNOT' or edge[1].targets[0] not in gate.targets:
-                return None
-            right = edge[1]
-
-        if right is None:
-            return None
-
-        for edge in graph.out_edges(right):
-            if edge[1].targets == gate.targets:
-                return edge[1]
-
-        return None
-
-    def commute_CNOT(graph, gate, cnot):
-        if cnot.label != 'CNOT' or cnot.controls[0] not in gate.targets:
-            return None
-
-        for edge in graph.out_edges(cnot):
-            if edge[1].targets[0] in gate.targets or (edge[1].controls and edge[1].controls[0] in gate.targets):
-                return edge[1]
-
-        return None
-
-    pass
+    def get_CNOT_pattern():
+        cnot1 = Gate(CNOT(0, 1))
+        return Pattern(nx.DiGraph({ cnot1: {} }),
+            cnot1,
+            SingleQubitGateCancellation.return_next_gate)

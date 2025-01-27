@@ -20,14 +20,16 @@ class Pattern:
         self.completion_function = completion_function
         self.repeated_gate = repeated_gate
 
-    def is_pattern_gate(self, graph_label, pattern_label, is_inverse):
-        if is_inverse and (((graph_label[-1] == '†') == pattern_label[-1] == '†') or pattern_label.replace('†', '') != graph_label.replace('†', '')):
+    def is_pattern_gate(self, graph_node: Gate, pattern_node: Gate, is_inverse):
+        if graph_node.should_be_rz and not pattern_node.is_Rz_gate():
             return False
-        elif not is_inverse and pattern_label != graph_label:
+        elif is_inverse and (((graph_node.label[-1] == '†') == pattern_node.label[-1] == '†') or pattern_node.label.replace('†', '') != graph_node.label.replace('†', '')):
+            return False
+        elif not is_inverse and pattern_node.label != graph_node.label:
             return False
         return True
 
-    def is_pattern(self, graph: nx.DiGraph, graph_node: Gate):
+    def exec_completion_function_if_is_pattern(self, graph: nx.DiGraph, graph_node: Gate):
         pattern_node = self.starting
         seen = []
         subgraph = nx.DiGraph()
@@ -64,7 +66,7 @@ class Pattern:
             else:
                 return False
 
-        if not self.is_pattern_gate(graph_node.label, pattern_node.label, is_inverse):
+        if not self.is_pattern_gate(graph_node, pattern_node, is_inverse):
             return False
 
         subgraph.add_node(graph_node)
@@ -75,7 +77,7 @@ class Pattern:
         is_repeated = self.repeated_gate and graph_node.label.replace('†', '') == self.repeated_gate.label
         while is_repeated:
             next: Gate = self.get_next_gate(graph, graph_node, is_inwards)
-            if next and self.is_pattern_gate(next.label, self.repeated_gate.label, is_inverse):
+            if next and self.is_pattern_gate(next, self.repeated_gate, is_inverse):
                 subgraph.add_node(next)
                 subgraph.add_edge(graph_node, next)
                 seen.append(next)

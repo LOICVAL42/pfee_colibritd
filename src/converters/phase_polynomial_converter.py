@@ -16,16 +16,13 @@ def create_phase_polynomial_from_netlist(netlist: np.ndarray[Gate]):
     for gate in netlist:
         if gate.label == 'Rz':
             phase_poly.append((gate.gate.theta, gate.targets[0]))
-        elif gate.label == 'S':
-            phase_poly.append((np.pi/2, gate.targets[0]))
-        elif gate.label == 'Sdag':
-            phase_poly.append((np.pi/2, gate.targets[0]))
         elif gate.label == 'CNOT':
             control, target = gate.controls[0], gate.targets[0]
             phase_poly.append(f"(x{target} ⊕ x{control})")
         elif gate.label == 'X':
             phase_poly.append(f"x{gate.targets[0]} ⊕ 1")
-    
+        else:
+            raise TypeError("It's not a X, Rz or Cnot")
     return phase_poly
 
 
@@ -46,10 +43,7 @@ def create_netlist_from_phase_polynomial(phase_poly):
             circuit.append(Gate(CNOT(control=control, target=target)))
         else:
             theta, target = term
-            if theta == np.pi/2:
-                circuit.append(Gate(S(target)))
-            else:
-                circuit.append(Gate(Rz(theta, target)))
+            circuit.append(Gate(Rz(theta, target)))
     
     return circuit
 

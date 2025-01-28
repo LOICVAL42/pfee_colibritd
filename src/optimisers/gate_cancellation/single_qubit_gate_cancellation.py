@@ -16,7 +16,7 @@ class SingleQubitGateCancellation(GateCancellationABC):
         return gate.is_inverse(other_gate)
 
     def can_commute(gate: Gate):
-        return gate.is_Rz_gate()
+        return gate.is_P_gate()
 
     # Patterns
     def commute_H_CNOT_H(graph, gate, left):

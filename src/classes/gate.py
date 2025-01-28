@@ -43,5 +43,8 @@ class Gate:
     def is_phase_gate(self) -> bool:
         return self.is_single_qubit_gate() and (self.label == "S" or self.label == "S†")
 
+    def is_P_gate(self) -> bool:
+        return self.is_single_qubit_gate() and self.label in ["S", "S†", "T", "T†"]
+    
     def is_Rz_gate(self) -> bool:
-        return self.is_single_qubit_gate() and self.label in ["S", "S†", "T", "T†", "Rz", "Rz†"]
+        return self.is_single_qubit_gate() and self.label in ["Rz", "Rz†"]

@@ -56,7 +56,7 @@ class CircuitOptimiser:
                             seen.append(other_gate)
                     elif other_gate.targets[0] != qubit:
                         continue
-                    elif not other_gate.is_Rz_gate():
+                    elif not (other_gate.is_Rz_gate() or other_gate.label == "X"):
                         break
                     else:
                         sg.append((other_gate, j))
@@ -77,7 +77,7 @@ class CircuitOptimiser:
                             seen.append(other_gate)
                     elif other_gate.targets[0] != qubit:
                         continue
-                    elif not other_gate.is_Rz_gate():
+                    elif not (other_gate.is_Rz_gate() or other_gate.label == "X"):
                         break
                     else:
                         sg.append((other_gate, j))

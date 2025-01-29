@@ -13,6 +13,8 @@ class Gate:
         else:
             self.controls = None
         self.gate = gate
+        # used in subgraph extraction
+        self.phase_index = -1
 
     def __repr__(self):
         return f"{self.label}({self.targets})" if self.controls == None else f"{self.label}(·{self.controls}, {self.targets})"

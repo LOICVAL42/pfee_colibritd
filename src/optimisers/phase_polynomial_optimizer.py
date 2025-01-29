@@ -63,13 +63,15 @@ def reduction_phase_polynomial(swap_equation):
     reduct_equation = []
     while swap_equation:
         actual_term = swap_equation.pop(0)
-        pop_list = []
+        terms_to_remove = []
+        
         if isinstance(actual_term, str) and '⊕' in actual_term:
             reduct_equation.append(actual_term)
         else:
             j = 0
             actual_theta, actual_target = actual_term
             all_theta = actual_theta
+            
             while j < len(swap_equation):
                 term = swap_equation[j]
                 if isinstance(term, str) and '⊕' in term:
@@ -82,13 +84,16 @@ def reduction_phase_polynomial(swap_equation):
                     theta, target = term
                     if actual_target == target:
                         all_theta = all_theta + theta
-                        pop_list.append(j)
+                        terms_to_remove.append(term)
                     j = j + 1
+                    
             if all_theta != 0:
                 reduct_equation.append((all_theta, actual_target))
             
-        for j in pop_list:
-            swap_equation.pop(j)
+            # Supprimer les termes en commençant par la fin pour ne pas perturber les indices
+            for term in reversed(terms_to_remove):
+                swap_equation.remove(term)
+                
     return reduct_equation
                 
     

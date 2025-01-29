@@ -5,7 +5,7 @@ from typing import List, Optional
 
 
 class Gate:
-    def __init__(self, gate: MPQP_gate):
+    def __init__(self, gate: MPQP_gate, phase_index = -1):
         self.targets = gate.targets
         self.label = gate.label
         if isinstance(gate, ControlledGate):
@@ -14,7 +14,7 @@ class Gate:
             self.controls = None
         self.gate = gate
         # used in subgraph extraction
-        self.phase_index = -1
+        self.phase_index = phase_index
 
     def __repr__(self):
         return f"{self.label}({self.targets})" if self.controls == None else f"{self.label}(·{self.controls}, {self.targets})"

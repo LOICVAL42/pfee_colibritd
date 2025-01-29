@@ -65,31 +65,7 @@ def reduction_phase_polynomial(swap_equation):
         actual_term = swap_equation.pop(0)
         pop_list = []
         if isinstance(actual_term, str) and '⊕' in actual_term:
-            actual_control, actual_target = extract_control_target(actual_term)
-            cnot_count = 1
-            j = 0
-            while j < len(swap_equation):
-                term = swap_equation[j]
-                if isinstance(term, str) and '⊕' in term:
-                    control , target = extract_control_target(term)
-                    if actual_term == term:
-                        cnot_count = cnot_count + 1
-                        pop_list.append(j)
-                        j = j + 1
-                    else:
-                        if actual_target == target or actual_target == control or actual_control == target:
-                            break
-                        else:
-                            j = j + 1
-                else:
-                    _ , target = term 
-                    if actual_target != target:
-                        j = j + 1
-                    else:
-                        break
-            if cnot_count % 2 != 0:
-                reduct_equation.append(actual_term)
-                
+            reduct_equation.append(actual_term)
         else:
             j = 0
             actual_theta, actual_target = actual_term

@@ -44,13 +44,13 @@ class CircuitOptimiser:
                         continue
                     if other_gate.label == "CNOT":
                         if other_gate.controls[0] == qubit and (not other_gate.targets[0] in qubits):
-                            gate.phase_index = j
+                            other_gate.phase_index = j
                             sg.append(other_gate)
                             seen.append(other_gate)
                             qubits.append(other_gate.targets[0])
                             indexes.append(j)
                         elif other_gate.targets[0] == qubit:
-                            gate.phase_index = j
+                            other_gate.phase_index = j
                             sg.append(other_gate)
                             seen.append(other_gate)
                     elif other_gate.targets[0] != qubit:
@@ -68,13 +68,13 @@ class CircuitOptimiser:
                         continue
                     if other_gate.label == "CNOT":
                         if other_gate.controls[0] == qubit and (not other_gate.targets[0] in qubits):
-                            gate.phase_index = j
+                            other_gate.phase_index = j
                             sg.append(other_gate)
                             seen.append(other_gate)
                             qubits.append(other_gate.targets[0])
                             indexes.append(j)
                         elif other_gate.targets[0] == qubit:
-                            gate.phase_index = j
+                            other_gate.phase_index = j
                             sg.append(other_gate)
                             seen.append(other_gate)
                     elif other_gate.targets[0] != qubit:
@@ -102,36 +102,57 @@ class CircuitOptimiser:
     def optimise_subgraphs(netlist):
         subgraphs = CircuitOptimiser.split_graph(netlist)
         new_netlist = []
-        i = 0
+        i = {}
+        last_beg = 0
         for sg in subgraphs:
             print(sg)
             sg_opti = CircuitOptimiser.phase_polynomial_optimise(sg)
             gate: Gate = None
+            last_phase_index_on_qubit = {}
+            for k in range(last_beg, sg[0].phase_index):
+                g = netlist[k]
+                if not g.label in ["CNOT", "X", "X†"] and not g.is_Rz_gate():
+                    new_netlist.append(g)
+                    i[g.targets[0]] = k + 1
+
             for gate in sg_opti:
                 if gate.label == "CNOT":
                     # If phase_index is -1, it means that it is NOT in a subgraph. Also, every CNOT is in a subgraph
-                    new_netlist += [g for g in netlist[i:gate.phase_index] if g.label != "CNOT" and g.phase_index != -1]
-                    i = gate.phase_index
+                    i_qubit = i.get(gate.targets[0])
+                    if not i_qubit:
+                        i[gate.targets[0]] = 0
+                    #new_netlist += [g for g in netlist[i[gate.targets[0]]:gate.phase_index] if not g.label in ["CNOT", "X", "X†"] and g.targets[0] == gate.targets[0] and not g.is_Rz_gate()]
                     added = False
                     for j in range(len(new_netlist)):
                         g2: Gate = new_netlist[j]
                         if g2.label == "CNOT" and g2.phase_index > gate.phase_index:
                             added = True
-                            new_netlist.insert(j, gate)
+                            to_add = [g for g in netlist[i[gate.targets[0]]:gate.phase_index] if not g.label in ["CNOT", "X", "X†"] and g.targets[0] == gate.targets[0] and not g.is_Rz_gate()]
+                            nb_added = len(to_add)
+                            for k in range(nb_added):
+                                new_netlist.insert(j + k, to_add[k])
+                            new_netlist.insert(j + nb_added, gate)
+                            last_phase_index_on_qubit[gate.targets[0]] = j + nb_added
                             break
                     if not added:
+                        new_netlist += [g for g in netlist[i[gate.targets[0]]:gate.phase_index] if not g.label in ["CNOT", "X", "X†"] and g.targets[0] == gate.targets[0] and not g.is_Rz_gate()]
+                        last_phase_index_on_qubit[gate.targets[0]] = len(new_netlist)
                         new_netlist.append(gate)
+                    i[gate.targets[0]] = gate.phase_index
                 else:
-                    added = False
-                    for j in range(len(new_netlist)):
-                        g2: Gate = new_netlist[j]
-                        if g2.label == "CNOT" and g2.phase_index > gate.phase_index:
-                            added = True
-                            new_netlist.insert(j, gate)
-                            break
-                    if not added:
+                    last = last_phase_index_on_qubit.get(gate.targets[0])
+                    if last:
+                        new_netlist.insert(last + 1, gate)
+                        for key in last_phase_index_on_qubit.keys():
+                            if (last_phase_index_on_qubit[key] >= last + 1):
+                                last_phase_index_on_qubit[key] += 1
+
+                    else:
                         new_netlist.append(gate)
-        new_netlist += [g for g in netlist[i:] if g.label != "CNOT" and g.phase_index != -1]
+            
+            last_beg = max(i.values()) + 1
+        for key in i.keys():
+            new_netlist += [g for g in netlist[i[key]:] if not g.label in ["CNOT", "X", "X†"] and g.targets[0] == key and not g.is_Rz_gate()]
         return new_netlist
     
     optimisers = [HadamardGateReduction.optimise, SingleQubitGateCancellation.optimise, CNOTGateCancellation.optimise, optimise_subgraphs]

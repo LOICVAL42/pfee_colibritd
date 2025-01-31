@@ -20,6 +20,16 @@ class CircuitOptimiser:
         phase_poly = optimize_phase_polynomial(phase_poly)
         return create_netlist_from_phase_polynomial(phase_poly)
 
+    def add_previous(netlist, subgraph, seen, qubit, i):
+        for j in range(i, -1, -1):
+            gate: Gate = netlist[j]
+            if gate.label == "CNOT" or not (gate.is_Rz_gate() or gate.label == "X"):
+                break
+            if gate.targets[0] != qubit:
+                continue
+            subgraph.append(gate)
+            seen.append(gate)
+
     def split_graph(netlist):
         seen = []
         subgraphs = []
@@ -45,13 +55,13 @@ class CircuitOptimiser:
                     if other_gate.label == "CNOT":
                         if other_gate.controls[0] == qubit and (not other_gate.targets[0] in qubits):
                             other_gate.phase_index = j
-                            sg.append(other_gate)
+                            sg.insert(indexes[qubit_index] - 1, other_gate)
                             seen.append(other_gate)
                             qubits.append(other_gate.targets[0])
                             indexes.append(j)
                         elif other_gate.targets[0] == qubit:
                             other_gate.phase_index = j
-                            sg.append(other_gate)
+                            sg.insert(indexes[qubit_index] - 1, other_gate)
                             seen.append(other_gate)
                     elif other_gate.targets[0] != qubit:
                         continue
@@ -59,7 +69,7 @@ class CircuitOptimiser:
                         break
                     else:
                         gate.phase_index = j
-                        sg.append(other_gate)
+                        sg.insert(indexes[qubit_index] - 1, other_gate)
                         seen.append(other_gate)
                 
                 for j in range(indexes[qubit_index]+1, len(netlist), 1):
@@ -105,7 +115,6 @@ class CircuitOptimiser:
         i = {}
         last_beg = 0
         for sg in subgraphs:
-            print(sg)
             sg_opti = CircuitOptimiser.phase_polynomial_optimise(sg)
             gate: Gate = None
             last_phase_index_on_qubit = {}

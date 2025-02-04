@@ -19,19 +19,19 @@ class GateCancellationABC(ABC):
                 if not cls.is_required_gate(node) or any(node in e for e in gates_to_cancel):
                     continue
                 count = 0
-                to_cancel = False
+                edge_to_cancel = None
                 for edge in graph.out_edges(node):
                     count += 1
                     # Already adjacent
                     if cls.is_required_gate(edge[1]) and cls.is_adjoint_gate(node, edge[1]):
-                        to_cancel = True
+                        edge_to_cancel = edge
                     elif cls.can_commute(edge[0]):
                         if cls.commute_optimise(graph, edge, gates_to_cancel):
                             break
                 
                 # To avoid a case where 2 cancellable CNOTs are linked in the graph but there's a gate between their controls XOR their targets.
-                if cls.verify_count(count) and to_cancel:
-                    gates_to_cancel.append((*edge, True))
+                if cls.verify_count(count) and edge_to_cancel:
+                    gates_to_cancel.append((*edge_to_cancel, True))
 
             cls.simplify_gates(graph, gates_to_cancel)
         return graph

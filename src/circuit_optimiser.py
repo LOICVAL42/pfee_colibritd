@@ -109,8 +109,11 @@ class CircuitOptimiser:
         
         return subgraphs
 
-    def optimise_subgraphs(netlist):
+    def optimise_subgraphs(graph: nx.DiGraph):
+        netlist = create_netlist_from_graph(graph)
         subgraphs = CircuitOptimiser.split_graph(netlist)
+        if len(subgraphs) == 0:
+            return create_graph_from_netlist(netlist)
         new_netlist = []
         i = {}
         last_beg = 0
@@ -162,7 +165,7 @@ class CircuitOptimiser:
             last_beg = max(i.values()) + 1
         for key in i.keys():
             new_netlist += [g for g in netlist[i[key]:] if not g.label in ["CNOT", "X", "X†"] and g.targets[0] == key and not g.is_Rz_gate()]
-        return new_netlist
+        return create_graph_from_netlist(new_netlist)
     
     optimisers = [HadamardGateReduction.optimise, SingleQubitGateCancellation.optimise, CNOTGateCancellation.optimise, optimise_subgraphs]
 
@@ -171,5 +174,5 @@ class CircuitOptimiser:
         graph: nx.DiGraph = create_graph_from_netlist(netlist)
         for i in order:
             graph = CircuitOptimiser.optimisers[i - 1](graph)
-            print(f"{i}: {graph.nodes}")
+            #print(f"{i}: {graph.nodes}")
         return netlist_to_qCircuit(create_netlist_from_graph(graph))

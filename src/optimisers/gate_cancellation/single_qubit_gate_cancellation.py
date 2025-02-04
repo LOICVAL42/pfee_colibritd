@@ -13,7 +13,7 @@ class SingleQubitGateCancellation(GateCancellationABC):
         return gate.is_single_qubit_gate()
 
     def is_adjoint_gate(gate, other_gate):
-        return gate.is_inverse(other_gate)
+        return gate.targets[0] == other_gate.targets[0] and gate.is_inverse(other_gate)
 
     def can_commute(gate: Gate):
         return gate.is_P_gate()
